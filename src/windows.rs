@@ -1,6 +1,5 @@
-use std::{fmt::format, net::SocketAddr, str::FromStr};
-
 use crate::{Error, Result, Sysproxy};
+use std::{net::SocketAddr, str::FromStr};
 use winreg::{enums, RegKey};
 
 const SUB_KEY: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
@@ -11,15 +10,16 @@ impl Sysproxy {
         let cur_var = hkcu.open_subkey_with_flags(SUB_KEY, enums::KEY_READ)?;
 
         let enable = cur_var.get_value::<u32, _>("ProxyEnable")? == 1u32;
-        let server = cur_var.get_value("ProxyServer")?;
+        let server = cur_var.get_value::<String, _>("ProxyServer")?;
+        let server = server.as_str();
 
-        let socket = SocketAddr::from_str(server)?;
+        let socket = SocketAddr::from_str(server).or(Err(Error::ParseStr))?;
         let host = socket.ip().to_string();
         let port = socket.port();
 
         let bypass = cur_var.get_value("ProxyOverride").unwrap_or("".into());
 
-        Ok(SysProxy {
+        Ok(Sysproxy {
             enable,
             host,
             port,
@@ -33,7 +33,7 @@ impl Sysproxy {
 
         let enable = if self.enable { 1u32 } else { 0u32 };
         let server = format!("{}:{}", self.host, self.port);
-        let bypass = self.bypass;
+        let bypass = self.bypass.as_str();
 
         cur_var.set_value("ProxyEnable", &enable)?;
         cur_var.set_value("ProxyServer", &server)?;
