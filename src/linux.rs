@@ -44,17 +44,24 @@ impl Sysproxy {
     pub fn get_enable() -> Result<bool> {
         let mode = gsettings().args(["get", CMD_KEY, "mode"]).output()?;
         let mode = from_utf8(&mode.stdout).or(Err(Error::ParseStr))?.trim();
-        Ok(mode == "manual")
+        Ok(mode == "'manual'")
     }
 
     pub fn get_bypass() -> Result<String> {
-        // Todo: parse the ignore-hosts
-        // ['aaa', 'bbb'] -> aaa,bbb
-        let ignore = gsettings()
+        let bypass = gsettings()
             .args(["get", CMD_KEY, "ignore-hosts"])
             .output()?;
-        let ignore = from_utf8(&ignore.stdout).or(Err(Error::ParseStr))?;
-        let bypass = ignore.to_string();
+        let bypass = from_utf8(&bypass.stdout).or(Err(Error::ParseStr))?.trim();
+
+        let bypass = bypass.strip_prefix('[').unwrap_or(bypass);
+        let bypass = bypass.strip_suffix(']').unwrap_or(bypass);
+
+        let bypass = bypass
+            .split(',')
+            .map(|h| strip_str(h.trim()))
+            .collect::<Vec<&str>>()
+            .join(",");
+
         Ok(bypass)
     }
 
@@ -77,9 +84,26 @@ impl Sysproxy {
     }
 
     pub fn set_bypass(&self) -> Result<()> {
-        let bypass = self.bypass.as_str();
+        let bypass = self
+            .bypass
+            .split(',')
+            .map(|h| {
+                let mut host = String::from(h.trim());
+                if !host.starts_with('\'') && !host.starts_with('"') {
+                    host = String::from("'") + &host;
+                }
+                if !host.ends_with('\'') && !host.ends_with('"') {
+                    host = host + "'";
+                }
+                host
+            })
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        let bypass = format!("[{bypass}]");
+
         gsettings()
-            .args(["set", CMD_KEY, "ignore-hosts", bypass])
+            .args(["set", CMD_KEY, "ignore-hosts", bypass.as_str()])
             .status()?;
         Ok(())
     }
@@ -122,6 +146,7 @@ fn get_proxy(service: &str) -> Result<Sysproxy> {
 
     let host = gsettings().args(["get", schema, "host"]).output()?;
     let host = from_utf8(&host.stdout).or(Err(Error::ParseStr))?.trim();
+    let host = strip_str(host);
 
     let port = gsettings().args(["get", schema, "port"]).output()?;
     let port = from_utf8(&port.stdout).or(Err(Error::ParseStr))?.trim();
@@ -133,4 +158,11 @@ fn get_proxy(service: &str) -> Result<Sysproxy> {
         port,
         bypass: "".into(),
     })
+}
+
+fn strip_str<'a>(text: &'a str) -> &'a str {
+    text.strip_prefix('\'')
+        .unwrap_or(text)
+        .strip_suffix('\'')
+        .unwrap_or(text)
 }
