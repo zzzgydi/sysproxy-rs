@@ -5,6 +5,7 @@ edition = "2021"
 authors = ["zzzgydi"]
 license = "MIT"
 readme = "README.md"
+repository = "https://github.com/zzzgydi/sysproxy-rs.git"
 keywords = ["system-proxy", "proxy", "networksetup", "gsettings"]
 description = "A library for set/get system proxy. Supports Windows, macOS and linux (via gsettings)."
 
