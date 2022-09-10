@@ -1,3 +1,5 @@
+//! Get/Set system proxy. Supports Windows, macOS and linux (via gsettings).
+
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]

@@ -5,7 +5,8 @@ edition = "2021"
 authors = ["zzzgydi"]
 license = "MIT"
 readme = "README.md"
-keywords = ["system proxy", "proxy"]
+keywords = ["system-proxy", "proxy", "networksetup", "gsettings"]
+description = "A library for set/get system proxy. Supports Windows, macOS and linux (via gsettings)."
 
 [dependencies]
 thiserror = "1"
