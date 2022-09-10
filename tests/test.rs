@@ -18,7 +18,7 @@ mod tests {
             enable: true,
             host: "127.0.0.1".into(),
             port: 9090,
-            bypass: "locahost,127.0.0.1/8".into(),
+            bypass: "localhost,127.0.0.1/8".into(),
         };
 
         assert!(sysproxy.set_system_proxy().is_ok());
