@@ -1,6 +1,8 @@
 use crate::{Error, Result, Sysproxy};
 use std::{net::SocketAddr, str::FromStr};
 use winreg::{enums, RegKey};
+use winapi::shared::ntdef::NULL;
+use winapi::um::wininet::{InternetSetOptionA, INTERNET_OPTION_SETTINGS_CHANGED, INTERNET_OPTION_REFRESH};
 
 const SUB_KEY: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
 
@@ -38,6 +40,10 @@ impl Sysproxy {
         cur_var.set_value("ProxyEnable", &enable)?;
         cur_var.set_value("ProxyServer", &server)?;
         cur_var.set_value("ProxyOverride", &bypass)?;
+
+        // flush settings
+        InternetSetOptionA(NULL, INTERNET_OPTION_SETTINGS_CHANGED, NULL, 0);
+        InternetSetOptionA(NULL, INTERNET_OPTION_REFRESH, NULL, 0);
 
         Ok(())
     }
