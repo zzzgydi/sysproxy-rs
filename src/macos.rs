@@ -4,7 +4,7 @@ use std::{process::Command, str::from_utf8};
 
 impl Sysproxy {
     pub fn get_system_proxy() -> Result<Sysproxy> {
-        let service = default_network_service()?;
+        let service = default_network_service().or_else(|_| default_network_service_by_ns())?;
         let service = service.as_str();
 
         let mut socks = Sysproxy::get_socks(service)?;
@@ -31,7 +31,7 @@ impl Sysproxy {
     }
 
     pub fn set_system_proxy(&self) -> Result<()> {
-        let service = default_network_service()?;
+        let service = default_network_service().or_else(|_| default_network_service_by_ns())?;
         let service = service.as_str();
 
         self.set_socks(service)?;
@@ -188,6 +188,19 @@ fn default_network_service() -> Result<String> {
             let service = get_service_by_device(interface)?;
             Ok(service)
         }
+        None => Err(Error::NetworkInterface),
+    }
+}
+
+fn default_network_service_by_ns() -> Result<String> {
+    let output = networksetup().arg("-listallnetworkservices").output()?;
+    let stdout = from_utf8(&output.stdout).or(Err(Error::ParseStr))?;
+    let mut lines = stdout.split('\n');
+    lines.next(); // ignore the tips
+
+    // get the first service
+    match lines.next() {
+        Some(line) => Ok(line.into()),
         None => Err(Error::NetworkInterface),
     }
 }
