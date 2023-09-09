@@ -25,6 +25,13 @@ pub enum Error {
 
     #[error("failed to get default network interface")]
     NetworkInterface,
+
+    #[error("failed to set proxy for this environment")]
+    NotSupport,
+
+    #[cfg(target_os = "linux")]
+    #[error(transparent)]
+    Xdg(#[from] xdg::BaseDirectoriesError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
