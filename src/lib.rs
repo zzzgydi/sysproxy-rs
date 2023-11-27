@@ -25,6 +25,9 @@ pub enum Error {
 
     #[error("failed to get default network interface")]
     NetworkInterface,
+
+    #[error("system call failed")]
+    SystemCallFailed(#[from] windows::SystemCallFailed),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
