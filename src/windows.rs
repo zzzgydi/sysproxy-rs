@@ -1,12 +1,16 @@
 use crate::{Error, Result, Sysproxy};
 use std::ffi::c_void;
-use std::{mem::size_of, net::SocketAddr, str::FromStr};
-use windows::core::PWSTR;
+use std::{mem::size_of, mem::ManuallyDrop, net::SocketAddr, str::FromStr};
+use windows::core::{w, HSTRING, PWSTR};
+use windows::Win32::Foundation::BOOL;
 use windows::Win32::NetworkManagement::Rras::{
     RasEnumEntriesW, ERROR_BUFFER_TOO_SMALL, RASENTRYNAMEW,
 };
+use windows::Win32::Networking::WinHttp::{
+    WinHttpGetIEProxyConfigForCurrentUser, WINHTTP_CURRENT_USER_IE_PROXY_CONFIG,
+};
 use windows::Win32::Networking::WinInet::{
-    InternetSetOptionW, INTERNET_OPTION_PER_CONNECTION_OPTION,
+    InternetGetProxyForUrl, InternetSetOptionW, INTERNET_OPTION_PER_CONNECTION_OPTION,
     INTERNET_OPTION_PROXY_SETTINGS_CHANGED, INTERNET_OPTION_REFRESH,
     INTERNET_PER_CONN_AUTOCONFIG_URL, INTERNET_PER_CONN_FLAGS, INTERNET_PER_CONN_OPTIONW,
     INTERNET_PER_CONN_OPTIONW_0, INTERNET_PER_CONN_OPTION_LISTW, INTERNET_PER_CONN_PROXY_BYPASS,
@@ -27,8 +31,9 @@ pub enum SystemCallFailed {
 
 const SUB_KEY: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
 
+/// unset proxy
 fn unset_proxy() -> Result<()> {
-    let mut p_opts = Vec::<INTERNET_PER_CONN_OPTIONW>::with_capacity(1);
+    let mut p_opts = ManuallyDrop::new(Vec::<INTERNET_PER_CONN_OPTIONW>::with_capacity(1));
     p_opts.push(INTERNET_PER_CONN_OPTIONW {
         dwOption: INTERNET_PER_CONN_FLAGS,
         Value: {
@@ -37,18 +42,19 @@ fn unset_proxy() -> Result<()> {
             v
         },
     });
-    let opts = INTERNET_PER_CONN_OPTION_LISTW {
+    let mut opts = INTERNET_PER_CONN_OPTION_LISTW {
         dwSize: size_of::<INTERNET_PER_CONN_OPTION_LISTW>() as u32,
         dwOptionCount: 1,
         dwOptionError: 0,
-        pOptions: p_opts.as_ptr() as *mut INTERNET_PER_CONN_OPTIONW,
+        pOptions: p_opts.as_mut_ptr() as *mut INTERNET_PER_CONN_OPTIONW,
         pszConnection: PWSTR::null(),
     };
     apply(&opts)
 }
 
 #[allow(dead_code)]
-fn set_auto_proxy(url: String) -> Result<()> {
+/// set auto detect proxy, aka PAC
+fn set_auto_proxy(url: &str) -> Result<()> {
     let mut p_opts = Vec::<INTERNET_PER_CONN_OPTIONW>::with_capacity(2);
     p_opts.push(INTERNET_PER_CONN_OPTIONW {
         dwOption: INTERNET_PER_CONN_FLAGS,
@@ -62,55 +68,47 @@ fn set_auto_proxy(url: String) -> Result<()> {
         dwOption: INTERNET_PER_CONN_AUTOCONFIG_URL,
         Value: {
             let mut v = INTERNET_PER_CONN_OPTIONW_0::default();
-            v.pszValue = PWSTR(url.as_ptr() as *mut u16);
+            v.pszValue = PWSTR::from_raw(HSTRING::from(url).as_ptr() as *mut u16);
             v
         },
     });
-    let opts = INTERNET_PER_CONN_OPTION_LISTW {
+    let mut opts = INTERNET_PER_CONN_OPTION_LISTW {
         dwSize: size_of::<INTERNET_PER_CONN_OPTION_LISTW>() as u32,
         dwOptionCount: 2,
         dwOptionError: 0,
-        pOptions: p_opts.as_ptr() as *mut INTERNET_PER_CONN_OPTIONW,
+        pOptions: p_opts.as_mut_ptr() as *mut INTERNET_PER_CONN_OPTIONW,
         pszConnection: PWSTR::null(),
     };
     apply(&opts)
 }
 
+/// set global proxy
 fn set_global_proxy(server: String, bypass: String) -> Result<()> {
-    let mut p_opts = Vec::<INTERNET_PER_CONN_OPTIONW>::with_capacity(3);
-    p_opts.push(INTERNET_PER_CONN_OPTIONW {
-        dwOption: INTERNET_PER_CONN_FLAGS,
-        Value: {
-            let mut v = INTERNET_PER_CONN_OPTIONW_0::default();
-            v.dwValue = PROXY_TYPE_PROXY | PROXY_TYPE_DIRECT;
-            v
-        },
-    });
-    p_opts.push(INTERNET_PER_CONN_OPTIONW {
-        dwOption: INTERNET_PER_CONN_PROXY_SERVER,
-        Value: {
-            let mut v = INTERNET_PER_CONN_OPTIONW_0::default();
-            v.pszValue = PWSTR(server.as_ptr() as *mut u16);
-            v
-        },
-    });
-    p_opts.push(INTERNET_PER_CONN_OPTIONW {
-        dwOption: INTERNET_PER_CONN_PROXY_BYPASS,
-        Value: {
-            let mut v = INTERNET_PER_CONN_OPTIONW_0::default();
-            v.pszValue = if bypass.is_empty() {
-                PWSTR("<local>".as_ptr() as *mut u16)
-            } else {
-                PWSTR(bypass.as_ptr() as *mut u16)
-            };
-            v
-        },
-    });
+    let p_opts = &mut [ManuallyDrop::new(INTERNET_PER_CONN_OPTIONW::default()); 3];
+    p_opts[0].dwOption = INTERNET_PER_CONN_FLAGS;
+    p_opts[0].Value.dwValue = PROXY_TYPE_PROXY | PROXY_TYPE_DIRECT;
+
+    let s = server.encode_utf16().chain([0u16]).collect::<Vec<u16>>();
+    p_opts[1].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
+    p_opts[1].Value.pszValue = PWSTR::from_raw(s.as_ptr() as *mut u16);
+
+    let b = if bypass.is_empty() {
+        "<local>".encode_utf16().chain([0u16]).collect::<Vec<u16>>()
+    } else {
+        bypass
+            .clone()
+            .encode_utf16()
+            .chain([0u16])
+            .collect::<Vec<u16>>()
+    };
+    p_opts[2].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
+    p_opts[2].Value.pszValue = PWSTR::from_raw(b.as_ptr() as *mut u16);
+
     let opts = INTERNET_PER_CONN_OPTION_LISTW {
         dwSize: size_of::<INTERNET_PER_CONN_OPTION_LISTW>() as u32,
         dwOptionCount: 3,
         dwOptionError: 0,
-        pOptions: p_opts.as_ptr() as *mut INTERNET_PER_CONN_OPTIONW,
+        pOptions: p_opts.as_mut_ptr() as *mut INTERNET_PER_CONN_OPTIONW,
         pszConnection: PWSTR::null(),
     };
     apply(&opts)
@@ -142,6 +140,7 @@ fn apply(options: &INTERNET_PER_CONN_OPTION_LISTW) -> Result<()> {
         }
         match ret {
             0 => {
+                println!("entries: {:?}", entries);
                 apply_connect(options, PWSTR::null())?;
                 for entry in entries.iter() {
                     apply_connect(
@@ -171,15 +170,16 @@ fn apply_connect(
 ) -> std::result::Result<(), SystemCallFailed> {
     let opts = &mut options.clone();
     opts.pszConnection = conn;
-
     unsafe {
         // setting options
+        let opts = opts as *const INTERNET_PER_CONN_OPTION_LISTW as *const c_void;
         InternetSetOptionW(
             None,
             INTERNET_OPTION_PER_CONNECTION_OPTION,
-            Some(opts as *const _ as *mut c_void),
+            Some(opts),
             size_of::<INTERNET_PER_CONN_OPTION_LISTW>() as u32,
-        )?;
+        )
+        .unwrap();
         // propagating changes
         InternetSetOptionW(None, INTERNET_OPTION_PROXY_SETTINGS_CHANGED, None, 0)?;
         // refreshing
@@ -190,6 +190,27 @@ fn apply_connect(
 
 impl Sysproxy {
     pub fn get_system_proxy() -> Result<Sysproxy> {
+        // let mut opts = WINHTTP_CURRENT_USER_IE_PROXY_CONFIG::default();
+        // unsafe {
+        //     // Get IE proxy config for current user to judge whether proxy is enabled.
+        //     // TODO: what the difference between WinHttpGetDefaultProxyConfiguration and WinHttpGetIEProxyConfigForCurrentUser?
+        //     if let Err(e) = WinHttpGetIEProxyConfigForCurrentUser(&mut opts) {
+        //         return Err(SystemCallFailed::Win32Error(e).into());
+        //     }
+        // }
+        // let enable = !opts.fAutoDetect.as_bool()
+        //     && (!opts.lpszAutoConfigUrl.is_null() || !opts.lpszProxy.is_null());
+        // let server = unsafe {
+        //     if !opts.lpszAutoConfigUrl.is_null() {
+        //         opts.lpszAutoConfigUrl
+        //             .to_string()
+        //             .or(Err(Error::ParseStr))?
+        //     } else {
+        //         opts.lpszProxy.to_string().or(Err(Error::ParseStr))?
+        //     }
+        // };
+        // let socket = SocketAddr::from_str(server.as_str()).or(Err(Error::ParseStr))?;
+
         let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
         let cur_var = hkcu.open_subkey_with_flags(SUB_KEY, enums::KEY_READ)?;
 

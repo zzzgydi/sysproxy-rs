@@ -17,4 +17,12 @@ interfaces = "0.0.8"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = { version = "0.10", features = ["transactions"] }
-windows = { version = "0.52", features = ["Win32_Networking_WinInet", "Win32_NetworkManagement_Rras", "Win32_Foundation"] }
+
+[target.'cfg(target_os = "windows")'.dependencies.windows]
+version = "0.52"
+features = [
+    "Win32_Networking_WinInet",
+    "Win32_Networking_WinHttp",
+    "Win32_NetworkManagement_Rras",
+    "Win32_Foundation",
+]

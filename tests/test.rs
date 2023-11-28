@@ -20,7 +20,6 @@ mod tests {
             port: 9090,
             bypass: "localhost,127.0.0.1/8".into(),
         };
-
         assert!(sysproxy.set_system_proxy().is_ok());
 
         let cur_proxy = Sysproxy::get_system_proxy().unwrap();
