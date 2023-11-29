@@ -17,8 +17,8 @@ pub struct Sysproxy {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("failed to parse string")]
-    ParseStr,
+    #[error("failed to parse string `{0}`")]
+    ParseStr(String),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
