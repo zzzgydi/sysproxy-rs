@@ -43,7 +43,7 @@ impl Sysproxy {
 
     pub fn get_enable() -> Result<bool> {
         let mode = gsettings().args(["get", CMD_KEY, "mode"]).output()?;
-        let mode = from_utf8(&mode.stdout).or(Err(Error::ParseStr))?.trim();
+        let mode = from_utf8(&mode.stdout).or(Err(Error::ParseStr(mode.stdout.to_string())))?.trim();
         Ok(mode == "'manual'")
     }
 
@@ -51,7 +51,7 @@ impl Sysproxy {
         let bypass = gsettings()
             .args(["get", CMD_KEY, "ignore-hosts"])
             .output()?;
-        let bypass = from_utf8(&bypass.stdout).or(Err(Error::ParseStr))?.trim();
+        let bypass = from_utf8(&bypass.stdout).or(Err(Error::ParseStr(bypass.stdout.to_string())))?.trim();
 
         let bypass = bypass.strip_prefix('[').unwrap_or(bypass);
         let bypass = bypass.strip_suffix(']').unwrap_or(bypass);
@@ -145,11 +145,11 @@ fn get_proxy(service: &str) -> Result<Sysproxy> {
     let schema = schema.as_str();
 
     let host = gsettings().args(["get", schema, "host"]).output()?;
-    let host = from_utf8(&host.stdout).or(Err(Error::ParseStr))?.trim();
+    let host = from_utf8(&host.stdout).or(Err(Error::ParseStr(host.stdout.to_string())))?.trim();
     let host = strip_str(host);
 
     let port = gsettings().args(["get", schema, "port"]).output()?;
-    let port = from_utf8(&port.stdout).or(Err(Error::ParseStr))?.trim();
+    let port = from_utf8(&port.stdout).or(Err(Error::ParseStr(port.stdout.to_string())))?.trim();
     let port = port.parse().unwrap_or(80u16);
 
     Ok(Sysproxy {
