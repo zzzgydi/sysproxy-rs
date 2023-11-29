@@ -26,6 +26,7 @@ pub enum Error {
     #[error("failed to get default network interface")]
     NetworkInterface,
 
+    #[cfg(target_os = "windows")]
     #[error("system call failed")]
     SystemCallFailed(#[from] windows::SystemCallFailed),
 }
