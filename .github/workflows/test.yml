@@ -41,4 +41,4 @@ jobs:
 
       - name: Run cargo test
         run: |
-          cargo test
+          cargo test -- --nocapture 
