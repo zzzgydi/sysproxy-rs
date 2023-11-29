@@ -9,7 +9,7 @@ mod tests {
 
     #[test]
     fn test_get() {
-        assert!(Sysproxy::get_system_proxy().is_ok());
+        Sysproxy::get_system_proxy().unwrap();
     }
 
     #[test]
@@ -20,7 +20,7 @@ mod tests {
             port: 9090,
             bypass: "localhost,127.0.0.1/8".into(),
         };
-        assert!(sysproxy.set_system_proxy().is_ok());
+        sysproxy.set_system_proxy().unwrap();
 
         let cur_proxy = Sysproxy::get_system_proxy().unwrap();
         let mut sysproxy = if cfg!(target_os = "windows") {
@@ -33,7 +33,7 @@ mod tests {
         assert_eq!(cur_proxy, sysproxy);
 
         sysproxy.enable = false;
-        assert!(sysproxy.set_system_proxy().is_ok());
+        sysproxy.set_system_proxy().unwrap();
 
         let current = Sysproxy::get_system_proxy().unwrap();
         assert_eq!(current, sysproxy);

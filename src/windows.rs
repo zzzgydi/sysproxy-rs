@@ -207,8 +207,7 @@ fn apply_connect(
             INTERNET_OPTION_PER_CONNECTION_OPTION,
             Some(opts),
             size_of::<INTERNET_PER_CONN_OPTION_LISTW>() as u32,
-        )
-        .unwrap();
+        )?;
         // propagating changes
         InternetSetOptionW(None, INTERNET_OPTION_PROXY_SETTINGS_CHANGED, None, 0)?;
         // refreshing
