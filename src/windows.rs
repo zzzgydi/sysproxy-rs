@@ -297,7 +297,22 @@ impl Sysproxy {
         // let socket = SocketAddr::from_str(server.as_str()).or(Err(Error::ParseStr))?;
 
         let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
-        let cur_var = hkcu.open_subkey_with_flags(SUB_KEY, enums::KEY_READ)?;
+        let cur_var = match hkcu.open_subkey_with_flags(SUB_KEY, enums::KEY_READ) {
+            Ok(v) => v,
+            Err(e) => {
+                // If the key is not found, it means proxy is not enabled.
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    return Ok(Sysproxy {
+                        enable: false,
+                        host: "".to_string(),
+                        port: 0,
+                        bypass: "".to_string(),
+                    });
+                } else {
+                    return Err(Error::Io(e));
+                }
+            }
+        };
 
         let enable = cur_var.get_value::<u32, _>("ProxyEnable")? == 1u32;
         let server = cur_var.get_value::<String, _>("ProxyServer")?;
