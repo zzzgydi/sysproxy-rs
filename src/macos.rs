@@ -59,7 +59,7 @@ impl Sysproxy {
             .output()?;
 
         let bypass = from_utf8(&bypass_output.stdout)
-            .or(Err(Error::ParseStr(bypass_output.stdout.to_string())))?
+            .or(Err(Error::ParseStr("bypass".into())))?
             .split('\n')
             .filter(|s| s.len() > 0)
             .collect::<Vec<&str>>()
@@ -138,7 +138,7 @@ fn get_proxy(proxy_type: ProxyType, service: &str) -> Result<Sysproxy> {
 
     let output = networksetup().args([target, service]).output()?;
 
-    let stdout = from_utf8(&output.stdout).or(Err(Error::ParseStr(output.stdout.to_string())))?;
+    let stdout = from_utf8(&output.stdout).or(Err(Error::ParseStr("output".into())))?;
     let enable = parse(stdout, "Enabled:");
     let enable = enable == "Yes";
 
@@ -146,7 +146,7 @@ fn get_proxy(proxy_type: ProxyType, service: &str) -> Result<Sysproxy> {
     let host = host.into();
 
     let port = parse(stdout, "Port:");
-    let port = port.parse().or(Err(Error::ParseStr(port.to_string())))?;
+    let port = port.parse().or(Err(Error::ParseStr("port".into())))?;
 
     Ok(Sysproxy {
         enable,
@@ -194,7 +194,7 @@ fn default_network_service() -> Result<String> {
 
 fn default_network_service_by_ns() -> Result<String> {
     let output = networksetup().arg("-listallnetworkservices").output()?;
-    let stdout = from_utf8(&output.stdout).or(Err(Error::ParseStr(output.stdout.to_string())))?;
+    let stdout = from_utf8(&output.stdout).or(Err(Error::ParseStr("output".into())))?;
     let mut lines = stdout.split('\n');
     lines.next(); // ignore the tips
 
@@ -207,7 +207,7 @@ fn default_network_service_by_ns() -> Result<String> {
 
 fn get_service_by_device(device: String) -> Result<String> {
     let output = networksetup().arg("-listallhardwareports").output()?;
-    let stdout = from_utf8(&output.stdout).or(Err(Error::ParseStr))?;
+    let stdout = from_utf8(&output.stdout).or(Err(Error::ParseStr("output".into())))?;
 
     let hardware = stdout.split("Ethernet Address:").find_map(|s| {
         let lines = s.split("\n");
