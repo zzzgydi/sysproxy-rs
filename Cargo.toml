@@ -23,7 +23,7 @@ winreg = { version = "0.10", features = ["transactions"] }
 version = "0.52"
 features = [
     "Win32_Networking_WinInet",
-    "Win32_Networking_WinHttp",
+    # "Win32_Networking_WinHttp",
     "Win32_NetworkManagement_Rras",
     "Win32_Foundation",
 ]
