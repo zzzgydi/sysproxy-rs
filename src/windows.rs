@@ -300,6 +300,8 @@ impl Sysproxy {
         let cur_var = match hkcu.open_subkey_with_flags(SUB_KEY, enums::KEY_READ) {
             Ok(v) => v,
             Err(e) => {
+                println!("error: {:?}", e);
+                println!("error kind: {:?}", e.kind());
                 // If the key is not found, it means proxy is not enabled.
                 if e.kind() == std::io::ErrorKind::NotFound {
                     return Ok(Sysproxy {
