@@ -272,6 +272,35 @@ fn translate_passby(input: String) -> Result<String> {
     Ok(buff.join(";"))
 }
 
+/// get_system_proxy_with_registry is intended to get system proxy from registry. 
+fn get_system_proxy_with_registry() -> Result<Sysproxy> {
+    let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
+    let cur_var = hkcu.open_subkey_with_flags(SUB_KEY, enums::KEY_READ)?;
+
+    let enable = cur_var.get_value::<u32, _>("ProxyEnable").unwrap_or(0u32) == 1u32;
+    let server = cur_var
+        .get_value::<String, _>("ProxyServer")
+        .unwrap_or("".into());
+    let server = server.as_str();
+    let (host, port) = if server.is_empty() {
+        ("".into(), 0)
+    } else {
+        let socket = SocketAddr::from_str(server).or(Err(Error::ParseStr(server.to_string())))?;
+        let host = socket.ip().to_string();
+        let port = socket.port();
+        (host, port)
+    };
+
+    let bypass = cur_var.get_value("ProxyOverride").unwrap_or("".into());
+
+    Ok(Sysproxy {
+        enable,
+        host,
+        port,
+        bypass,
+    })
+}
+
 impl Sysproxy {
     // TODO: try to translate ip range to cidr
     pub fn get_system_proxy() -> Result<Sysproxy> {
@@ -296,42 +325,7 @@ impl Sysproxy {
         // };
         // let socket = SocketAddr::from_str(server.as_str()).or(Err(Error::ParseStr))?;
 
-        let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
-        let cur_var = match hkcu.open_subkey_with_flags(SUB_KEY, enums::KEY_READ) {
-            Ok(v) => v,
-            Err(e) => {
-                println!("error: {:?}", e);
-                println!("error kind: {:?}", e.kind());
-                // If the key is not found, it means proxy is not enabled.
-                if e.kind() == std::io::ErrorKind::NotFound {
-                    return Ok(Sysproxy {
-                        enable: false,
-                        host: "".to_string(),
-                        port: 0,
-                        bypass: "".to_string(),
-                    });
-                } else {
-                    return Err(Error::Io(e));
-                }
-            }
-        };
-
-        let enable = cur_var.get_value::<u32, _>("ProxyEnable")? == 1u32;
-        let server = cur_var.get_value::<String, _>("ProxyServer")?;
-        let server = server.as_str();
-
-        let socket = SocketAddr::from_str(server).or(Err(Error::ParseStr(server.to_string())))?;
-        let host = socket.ip().to_string();
-        let port = socket.port();
-
-        let bypass = cur_var.get_value("ProxyOverride").unwrap_or("".into());
-
-        Ok(Sysproxy {
-            enable,
-            host,
-            port,
-            bypass,
-        })
+        get_system_proxy_with_registry()
     }
 
     pub fn set_system_proxy(&self) -> Result<()> {
