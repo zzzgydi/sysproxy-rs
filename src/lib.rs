@@ -17,14 +17,18 @@ pub struct Sysproxy {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("failed to parse string")]
-    ParseStr,
+    #[error("failed to parse string `{0}`")]
+    ParseStr(String),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
     #[error("failed to get default network interface")]
     NetworkInterface,
+
+    #[cfg(target_os = "windows")]
+    #[error("system call failed")]
+    SystemCallFailed(#[from] windows::SystemCallFailed),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
