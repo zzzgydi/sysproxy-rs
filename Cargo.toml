@@ -11,19 +11,18 @@ description = "A library for set/get system proxy. Supports Windows, macOS and l
 
 [dependencies]
 thiserror = "1"
+iptools = { version = "0.2.4", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 interfaces = "0.0.8"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-iptools = "0.2.4"
 winreg = { version = "0.10", features = ["transactions"] }
-
-[target.'cfg(target_os = "windows")'.dependencies.windows]
-version = "0.52"
-features = [
+windows = { version = "0.52", features = [
     "Win32_Networking_WinInet",
-    # "Win32_Networking_WinHttp",
-    "Win32_NetworkManagement_Rras",
     "Win32_Foundation",
-]
+] }
+
+
+[features]
+default = ["iptools"]

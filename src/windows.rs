@@ -1,6 +1,4 @@
 use crate::{Error, Result, Sysproxy};
-use iptools::iprange::IpRange;
-use iptools::ipv4::validate_cidr;
 use std::ffi::c_void;
 use std::{mem::size_of, mem::ManuallyDrop, net::SocketAddr, str::FromStr};
 use windows::core::PWSTR;
@@ -169,7 +167,6 @@ fn apply(options: &INTERNET_PER_CONN_OPTION_LISTW) -> Result<()> {
         }
         match ret {
             0 => {
-                println!("entries: {:?}", entries);
                 apply_connect(options, PWSTR::null())?;
                 for entry in entries.iter() {
                     apply_connect(
@@ -216,63 +213,7 @@ fn apply_connect(
     Ok(())
 }
 
-/// translate_passby is intended to translate common input used by sysproxy to windows supported format
-/// exmaple input:
-/// <local>,127.0.0.1/8
-/// will be translated to:
-/// <local>; 127.*
-fn translate_passby(input: String) -> Result<String> {
-    if input.is_empty() {
-        return Ok("<local>".to_string());
-    }
-    let mut buff = Vec::<String>::new();
-    let list = input.split([',', ';']).collect::<Vec<&str>>();
-    'outer: for item in list.iter() {
-        let item = item.trim();
-        // TODO: process ipv6 cidr, but it requires ipv6 local proxy was widely used.
-        if !validate_cidr(item) {
-            buff.push(item.to_string());
-            continue;
-        }
-        // manual analysis the ip range
-        let ip = IpRange::new(item, "").or(Err(Error::ParseStr(item.to_string())))?;
-        let (start, end) = ip.get_range().unwrap(); // It must be cidr, so unwrap is safe.
-        let start = start.split('.').collect::<Vec<&str>>();
-        let end = end.split('.').collect::<Vec<&str>>();
-        let mut builder = String::new();
-        for i in 0..4 {
-            if start[i] == end[i] {
-                builder.push_str(start[i]);
-                if i != 3 {
-                    builder.push('.');
-                }
-                continue;
-            }
-            if start[i] == "0" && end[i] == "255" {
-                builder.push('*');
-                buff.push(builder);
-                break 'outer;
-            }
-            // Note that this logic is only for ipv4, and not support ipv6.
-            // if start pointer is not 0, or end pointer is not 255, it means the range is not a full range.
-            // So we should iterate the range and push all the ip into the buffer.
-            for j in start[i].parse::<u8>().unwrap()..end[i].parse::<u8>().unwrap() + 1 {
-                let mut builder = builder.clone();
-                builder.push_str(&j.to_string());
-                if i != 3 {
-                    builder.push('.');
-                    builder.push('*');
-                }
-                buff.push(builder);
-            }
-            break 'outer;
-        }
-        buff.push(builder.to_string()); // It must be a cidr with no range, so push it directly.
-    }
-    Ok(buff.join(";"))
-}
-
-/// get_system_proxy_with_registry is intended to get system proxy from registry. 
+/// get_system_proxy_with_registry is intended to get system proxy from registry.
 fn get_system_proxy_with_registry() -> Result<Sysproxy> {
     let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
     let cur_var = hkcu.open_subkey_with_flags(SUB_KEY, enums::KEY_READ)?;
@@ -302,38 +243,13 @@ fn get_system_proxy_with_registry() -> Result<Sysproxy> {
 }
 
 impl Sysproxy {
-    // TODO: try to translate ip range to cidr
     pub fn get_system_proxy() -> Result<Sysproxy> {
-        // let mut opts = WINHTTP_CURRENT_USER_IE_PROXY_CONFIG::default();
-        // unsafe {
-        //     // Get IE proxy config for current user to judge whether proxy is enabled.
-        //     // TODO: what the difference between WinHttpGetDefaultProxyConfiguration and WinHttpGetIEProxyConfigForCurrentUser?
-        //     if let Err(e) = WinHttpGetIEProxyConfigForCurrentUser(&mut opts) {
-        //         return Err(SystemCallFailed::Win32Error(e).into());
-        //     }
-        // }
-        // let enable = !opts.fAutoDetect.as_bool()
-        //     && (!opts.lpszAutoConfigUrl.is_null() || !opts.lpszProxy.is_null());
-        // let server = unsafe {
-        //     if !opts.lpszAutoConfigUrl.is_null() {
-        //         opts.lpszAutoConfigUrl
-        //             .to_string()
-        //             .or(Err(Error::ParseStr))?
-        //     } else {
-        //         opts.lpszProxy.to_string().or(Err(Error::ParseStr))?
-        //     }
-        // };
-        // let socket = SocketAddr::from_str(server.as_str()).or(Err(Error::ParseStr))?;
-
         get_system_proxy_with_registry()
     }
 
     pub fn set_system_proxy(&self) -> Result<()> {
         match self.enable {
-            true => set_global_proxy(
-                format!("{}:{}", self.host, self.port),
-                translate_passby(self.bypass.clone())?,
-            ),
+            true => set_global_proxy(format!("{}:{}", self.host, self.port), self.bypass.clone()),
             false => unset_proxy(),
         }
     }
