@@ -20,6 +20,7 @@ interfaces = "0.0.8"
 winreg = { version = "0.10", features = ["transactions"] }
 windows = { version = "0.52", features = [
     "Win32_Networking_WinInet",
+    "Win32_NetworkManagement_Rras",
     "Win32_Foundation",
 ] }
 
