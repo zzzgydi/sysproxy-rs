@@ -8,7 +8,7 @@ mod macos;
 mod windows;
 
 // #[cfg(feature = "utils")]
-mod utils;
+pub mod utils;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Sysproxy {
