@@ -17,7 +17,7 @@ iptools = { version = "0.2.4", optional = true }
 interfaces = "0.0.8"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-winreg = { version = "0.10", features = ["transactions"] }
+winreg = { version = "0.52", features = ["transactions"] }
 windows = { version = "0.52", features = [
     "Win32_Networking_WinInet",
     "Win32_NetworkManagement_Rras",
