@@ -1,16 +1,32 @@
 use crate::{Error, Result, Sysproxy};
+use log::debug;
 use std::net::{SocketAddr, UdpSocket};
 use std::{process::Command, str::from_utf8};
 
 impl Sysproxy {
     pub fn get_system_proxy() -> Result<Sysproxy> {
-        let service = default_network_service().or_else(|_| default_network_service_by_ns())?;
+        let service = default_network_service().or_else(|e| {
+            debug!("Failed to get network service: {:?}", e);
+            default_network_service_by_ns()
+        });
+        if let Err(e) = service {
+            debug!("Failed to get network service by networksetup: {:?}", e);
+            return Err(e);
+        }
+        let service = service.unwrap();
         let service = service.as_str();
 
         let mut socks = Sysproxy::get_socks(service)?;
+        debug!("Getting SOCKS proxy: {:?}", socks);
+
         let http = Sysproxy::get_http(service)?;
+        debug!("Getting HTTP proxy: {:?}", http);
+
         let https = Sysproxy::get_https(service)?;
+        debug!("Getting HTTPS proxy: {:?}", https);
+
         let bypass = Sysproxy::get_bypass(service)?;
+        debug!("Getting bypass domains: {:?}", bypass);
 
         socks.bypass = bypass;
 
@@ -31,12 +47,29 @@ impl Sysproxy {
     }
 
     pub fn set_system_proxy(&self) -> Result<()> {
-        let service = default_network_service().or_else(|_| default_network_service_by_ns())?;
+        let service = default_network_service().or_else(|e| {
+            debug!("Failed to get network service: {:?}", e);
+            default_network_service_by_ns()
+        });
+        if let Err(e) = service {
+            debug!("Failed to get network service by networksetup: {:?}", e);
+            return Err(e);
+        }
+        let service = service.unwrap();
         let service = service.as_str();
 
+        debug!("Use network service: {}", service);
+
+        debug!("Setting SOCKS proxy");
         self.set_socks(service)?;
+
+        debug!("Setting HTTP proxy");
         self.set_https(service)?;
+
+        debug!("Setting HTTPS proxy");
         self.set_http(service)?;
+
+        debug!("Setting bypass domains");
         self.set_bypass(service)?;
         Ok(())
     }

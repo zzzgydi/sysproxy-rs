@@ -10,6 +10,7 @@ keywords = ["system-proxy", "proxy", "networksetup", "gsettings"]
 description = "A library for set/get system proxy. Supports Windows, macOS and linux (via gsettings)."
 
 [dependencies]
+log = "0.4"
 thiserror = "1"
 iptools = { version = "0.2.4", optional = true }
 
