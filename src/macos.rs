@@ -218,7 +218,7 @@ fn default_network_service() -> Result<String> {
 
     match interface {
         Some(interface) => {
-            let service = get_service_by_device(interface)?;
+            let service = get_server_by_order(interface)?;
             Ok(service)
         }
         None => Err(Error::NetworkInterface),
@@ -238,6 +238,7 @@ fn default_network_service_by_ns() -> Result<String> {
     }
 }
 
+#[allow(dead_code)]
 fn get_service_by_device(device: String) -> Result<String> {
     let output = networksetup().arg("-listallhardwareports").output()?;
     let stdout = from_utf8(&output.stdout).or(Err(Error::ParseStr("output".into())))?;
@@ -266,5 +267,68 @@ fn get_service_by_device(device: String) -> Result<String> {
     match hardware {
         Some(hardware) => Ok(hardware.into()),
         None => Err(Error::NetworkInterface),
+    }
+}
+
+fn get_server_by_order(device: String) -> Result<String> {
+    let services = listnetworkserviceorder()?;
+    let service = services
+        .into_iter()
+        .find(|(_, _, d)| d == &device)
+        .map(|(s, _, _)| s);
+    match service {
+        Some(service) => Ok(service),
+        None => Err(Error::NetworkInterface),
+    }
+}
+
+fn listnetworkserviceorder() -> Result<Vec<(String, String, String)>> {
+    let output = networksetup().arg("-listnetworkserviceorder").output()?;
+    let stdout = from_utf8(&output.stdout).or(Err(Error::ParseStr("output".into())))?;
+
+    let mut lines = stdout.split('\n');
+    lines.next(); // ignore the tips
+
+    let mut services = Vec::new();
+    let mut p: Option<(String, String, String)> = None;
+
+    for line in lines {
+        if !line.starts_with("(") {
+            continue;
+        }
+
+        if p.is_none() {
+            let ri = line.find(")");
+            if ri.is_none() {
+                continue;
+            }
+            let ri = ri.unwrap();
+            let service = line[ri + 1..].trim();
+            p = Some((service.into(), "".into(), "".into()));
+        } else {
+            let line = &line[1..line.len() - 1];
+            let pi = line.find("Port:");
+            let di = line.find(", Device:");
+            if pi.is_none() || di.is_none() {
+                continue;
+            }
+            let pi = pi.unwrap();
+            let di = di.unwrap();
+            let port = line[pi + 5..di].trim();
+            let device = line[di + 9..].trim();
+            let (service, _, _) = p.as_mut().unwrap();
+            *p.as_mut().unwrap() = (service.to_owned(), port.into(), device.into());
+            services.push(p.take().unwrap());
+        }
+    }
+
+    Ok(services)
+}
+
+#[test]
+fn test_order() {
+    let services = listnetworkserviceorder().unwrap();
+    for (service, port, device) in services {
+        println!("service: {}, port: {}, device: {}", service, port, device);
     }
 }
