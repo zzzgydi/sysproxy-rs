@@ -118,9 +118,15 @@ impl Sysproxy {
             .unwrap_or("".into());
         let server = server.as_str();
 
-        let socket = SocketAddr::from_str(server).or(Err(Error::ParseStr(server.to_string())))?;
-        let host = socket.ip().to_string();
-        let port = socket.port();
+        let (host, port) = if server.is_empty() {
+            ("".into(), 0)
+        } else {
+            let socket =
+                SocketAddr::from_str(server).or(Err(Error::ParseStr(server.to_string())))?;
+            let host = socket.ip().to_string();
+            let port = socket.port();
+            (host, port)
+        };
 
         let bypass = cur_var.get_value("ProxyOverride").unwrap_or("".into());
 
