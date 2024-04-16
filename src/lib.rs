@@ -29,6 +29,13 @@ pub enum Error {
     #[error("failed to get default network interface")]
     NetworkInterface,
 
+    #[error("failed to set proxy for this environment")]
+    NotSupport,
+
+    #[cfg(target_os = "linux")]
+    #[error(transparent)]
+    Xdg(#[from] xdg::BaseDirectoriesError),
+
     #[cfg(target_os = "windows")]
     #[error("system call failed")]
     SystemCall(#[from] windows::Win32Error),

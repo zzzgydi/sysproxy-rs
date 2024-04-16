@@ -14,6 +14,9 @@ log = "0.4"
 thiserror = "1"
 iptools = { version = "0.2.4", optional = true }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+xdg = "^2.5"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 interfaces = "0.0.8"
 
