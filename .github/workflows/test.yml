@@ -1,6 +1,12 @@
 name: Test
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 env:
   CARGO_INCREMENTAL: 0
@@ -35,4 +41,4 @@ jobs:
 
       - name: Run cargo test
         run: |
-          cargo test
+          cargo test -- --nocapture 

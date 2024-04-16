@@ -7,6 +7,9 @@ mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
 
+// #[cfg(feature = "utils")]
+pub mod utils;
+
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Sysproxy {
     pub enable: bool,
@@ -17,8 +20,8 @@ pub struct Sysproxy {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("failed to parse string")]
-    ParseStr,
+    #[error("failed to parse string `{0}`")]
+    ParseStr(String),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -32,6 +35,10 @@ pub enum Error {
     #[cfg(target_os = "linux")]
     #[error(transparent)]
     Xdg(#[from] xdg::BaseDirectoriesError),
+
+    #[cfg(target_os = "windows")]
+    #[error("system call failed")]
+    SystemCall(#[from] windows::Win32Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -46,13 +46,13 @@ impl Sysproxy {
         match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
             "GNOME" => {
                 let mode = gsettings().args(["get", CMD_KEY, "mode"]).output()?;
-                let mode = from_utf8(&mode.stdout).or(Err(Error::ParseStr))?.trim();
+                let mode = from_utf8(&mode.stdout).or(Err(Error::ParseStr("mode".into())))?.trim();
                 Ok(mode == "'manual'")
             }
             "KDE" => {
                 let xdg_dir = xdg::BaseDirectories::new()?;
                 let config = xdg_dir.get_config_file("kioslaverc");
-                let config = config.to_str().ok_or(Error::ParseStr)?;
+                let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
 
                 let mode = kreadconfig()
                     .args([
@@ -64,7 +64,7 @@ impl Sysproxy {
                         "ProxyType",
                     ])
                     .output()?;
-                let mode = from_utf8(&mode.stdout).or(Err(Error::ParseStr))?.trim();
+                let mode = from_utf8(&mode.stdout).or(Err(Error::ParseStr("mode".into())))?.trim();
                 Ok(mode == "1")
             }
             _ => Err(Error::NotSupport),
@@ -77,7 +77,9 @@ impl Sysproxy {
                 let bypass = gsettings()
                     .args(["get", CMD_KEY, "ignore-hosts"])
                     .output()?;
-                let bypass = from_utf8(&bypass.stdout).or(Err(Error::ParseStr))?.trim();
+                let bypass = from_utf8(&bypass.stdout)
+                    .or(Err(Error::ParseStr("bypass".into())))?
+                    .trim();
 
                 let bypass = bypass.strip_prefix('[').unwrap_or(bypass);
                 let bypass = bypass.strip_suffix(']').unwrap_or(bypass);
@@ -93,7 +95,7 @@ impl Sysproxy {
             "KDE" => {
                 let xdg_dir = xdg::BaseDirectories::new()?;
                 let config = xdg_dir.get_config_file("kioslaverc");
-                let config = config.to_str().ok_or(Error::ParseStr)?;
+                let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
 
                 let bypass = kreadconfig()
                     .args([
@@ -105,7 +107,7 @@ impl Sysproxy {
                         "NoProxyFor",
                     ])
                     .output()?;
-                let bypass = from_utf8(&bypass.stdout).or(Err(Error::ParseStr))?.trim();
+                let bypass = from_utf8(&bypass.stdout).or(Err(Error::ParseStr("bypass".into())))?.trim();
 
                 let bypass = bypass
                     .split(',')
@@ -295,11 +297,15 @@ fn get_proxy(service: &str) -> Result<Sysproxy> {
             let schema = schema.as_str();
 
             let host = gsettings().args(["get", schema, "host"]).output()?;
-            let host = from_utf8(&host.stdout).or(Err(Error::ParseStr))?.trim();
+            let host = from_utf8(&host.stdout)
+                .or(Err(Error::ParseStr("host".into())))?
+                .trim();
             let host = strip_str(host);
 
             let port = gsettings().args(["get", schema, "port"]).output()?;
-            let port = from_utf8(&port.stdout).or(Err(Error::ParseStr))?.trim();
+            let port = from_utf8(&port.stdout)
+                .or(Err(Error::ParseStr("port".into())))?
+                .trim();
             let port = port.parse().unwrap_or(80u16);
 
             Ok(Sysproxy {
@@ -312,7 +318,7 @@ fn get_proxy(service: &str) -> Result<Sysproxy> {
         "KDE" => {
             let xdg_dir = xdg::BaseDirectories::new()?;
             let config = xdg_dir.get_config_file("kioslaverc");
-            let config = config.to_str().ok_or(Error::ParseStr)?;
+            let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
 
             let key = format!("{service}Proxy");
             let key = key.as_str();
@@ -320,11 +326,11 @@ fn get_proxy(service: &str) -> Result<Sysproxy> {
             let schema = kreadconfig()
                 .args(["--file", config, "--group", "Proxy Settings", "--key", key])
                 .output()?;
-            let schema = from_utf8(&schema.stdout).or(Err(Error::ParseStr))?.trim();
+            let schema = from_utf8(&schema.stdout).or(Err(Error::ParseStr("schema".into())))?.trim();
             let schema = schema
                 .trim_start_matches("http://")
                 .trim_start_matches("socks://");
-            let schema = schema.split_once(' ').ok_or(Error::ParseStr)?;
+            let schema = schema.split_once(' ').ok_or(Error::ParseStr("schema".into()))?;
 
             let host = strip_str(schema.0);
             let port = schema.1.parse().unwrap_or(80u16);

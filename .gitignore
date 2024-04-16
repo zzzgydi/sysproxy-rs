@@ -1,2 +1,8 @@
-/target
-/Cargo.lock
+debug/
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+.vscode
+.DS_Store
