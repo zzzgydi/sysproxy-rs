@@ -44,13 +44,6 @@ impl Sysproxy {
 
     pub fn get_enable() -> Result<bool> {
         match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-            "GNOME" => {
-                let mode = gsettings().args(["get", CMD_KEY, "mode"]).output()?;
-                let mode = from_utf8(&mode.stdout)
-                    .or(Err(Error::ParseStr("mode".into())))?
-                    .trim();
-                Ok(mode == "'manual'")
-            }
             "KDE" => {
                 let xdg_dir = xdg::BaseDirectories::new()?;
                 let config = xdg_dir.get_config_file("kioslaverc");
@@ -71,31 +64,18 @@ impl Sysproxy {
                     .trim();
                 Ok(mode == "1")
             }
-            _ => Err(Error::NotSupport),
+            _ => {
+                let mode = gsettings().args(["get", CMD_KEY, "mode"]).output()?;
+                let mode = from_utf8(&mode.stdout)
+                    .or(Err(Error::ParseStr("mode".into())))?
+                    .trim();
+                Ok(mode == "'manual'")
+            }
         }
     }
 
     pub fn get_bypass() -> Result<String> {
         match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-            "GNOME" => {
-                let bypass = gsettings()
-                    .args(["get", CMD_KEY, "ignore-hosts"])
-                    .output()?;
-                let bypass = from_utf8(&bypass.stdout)
-                    .or(Err(Error::ParseStr("bypass".into())))?
-                    .trim();
-
-                let bypass = bypass.strip_prefix('[').unwrap_or(bypass);
-                let bypass = bypass.strip_suffix(']').unwrap_or(bypass);
-
-                let bypass = bypass
-                    .split(',')
-                    .map(|h| strip_str(h.trim()))
-                    .collect::<Vec<&str>>()
-                    .join(",");
-
-                Ok(bypass)
-            }
             "KDE" => {
                 let xdg_dir = xdg::BaseDirectories::new()?;
                 let config = xdg_dir.get_config_file("kioslaverc");
@@ -123,7 +103,25 @@ impl Sysproxy {
 
                 Ok(bypass)
             }
-            _ => Err(Error::NotSupport),
+            _ => {
+                let bypass = gsettings()
+                    .args(["get", CMD_KEY, "ignore-hosts"])
+                    .output()?;
+                let bypass = from_utf8(&bypass.stdout)
+                    .or(Err(Error::ParseStr("bypass".into())))?
+                    .trim();
+
+                let bypass = bypass.strip_prefix('[').unwrap_or(bypass);
+                let bypass = bypass.strip_suffix(']').unwrap_or(bypass);
+
+                let bypass = bypass
+                    .split(',')
+                    .map(|h| strip_str(h.trim()))
+                    .collect::<Vec<&str>>()
+                    .join(",");
+
+                Ok(bypass)
+            }
         }
     }
 
@@ -141,11 +139,6 @@ impl Sysproxy {
 
     pub fn set_enable(&self) -> Result<()> {
         match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-            "GNOME" => {
-                let mode = if self.enable { "'manual'" } else { "'none'" };
-                gsettings().args(["set", CMD_KEY, "mode", mode]).status()?;
-                Ok(())
-            }
             "KDE" => {
                 let xdg_dir = xdg::BaseDirectories::new()?;
                 let config = xdg_dir.get_config_file("kioslaverc");
@@ -164,13 +157,35 @@ impl Sysproxy {
                     .status()?;
                 Ok(())
             }
-            _ => Err(Error::NotSupport),
+            _ => {
+                let mode = if self.enable { "'manual'" } else { "'none'" };
+                gsettings().args(["set", CMD_KEY, "mode", mode]).status()?;
+                Ok(())
+            }
         }
     }
 
     pub fn set_bypass(&self) -> Result<()> {
         match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-            "GNOME" => {
+            "KDE" => {
+                let xdg_dir = xdg::BaseDirectories::new()?;
+                let config = xdg_dir.get_config_file("kioslaverc");
+                let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
+
+                kwriteconfig()
+                    .args([
+                        "--file",
+                        config,
+                        "--group",
+                        "Proxy Settings",
+                        "--key",
+                        "NoProxyFor",
+                        self.bypass.as_str(),
+                    ])
+                    .status()?;
+                Ok(())
+            }
+            _ => {
                 let bypass = self
                     .bypass
                     .split(',')
@@ -194,25 +209,6 @@ impl Sysproxy {
                     .status()?;
                 Ok(())
             }
-            "KDE" => {
-                let xdg_dir = xdg::BaseDirectories::new()?;
-                let config = xdg_dir.get_config_file("kioslaverc");
-                let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
-
-                kwriteconfig()
-                    .args([
-                        "--file",
-                        config,
-                        "--group",
-                        "Proxy Settings",
-                        "--key",
-                        "NoProxyFor",
-                        self.bypass.as_str(),
-                    ])
-                    .status()?;
-                Ok(())
-            }
-            _ => Err(Error::NotSupport),
         }
     }
 
@@ -243,20 +239,6 @@ fn kwriteconfig() -> Command {
 
 fn set_proxy(proxy: &Sysproxy, service: &str) -> Result<()> {
     match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-        "GNOME" => {
-            let schema = format!("{CMD_KEY}.{service}");
-            let schema = schema.as_str();
-
-            let host = format!("'{}'", proxy.host);
-            let host = host.as_str();
-            let port = format!("{}", proxy.port);
-            let port = port.as_str();
-
-            gsettings().args(["set", schema, "host", host]).status()?;
-            gsettings().args(["set", schema, "port", port]).status()?;
-
-            Ok(())
-        }
         "KDE" => {
             let xdg_dir = xdg::BaseDirectories::new()?;
             let config = xdg_dir.get_config_file("kioslaverc");
@@ -292,35 +274,25 @@ fn set_proxy(proxy: &Sysproxy, service: &str) -> Result<()> {
 
             Ok(())
         }
-        _ => Err(Error::NotSupport),
+        _ => {
+            let schema = format!("{CMD_KEY}.{service}");
+            let schema = schema.as_str();
+
+            let host = format!("'{}'", proxy.host);
+            let host = host.as_str();
+            let port = format!("{}", proxy.port);
+            let port = port.as_str();
+
+            gsettings().args(["set", schema, "host", host]).status()?;
+            gsettings().args(["set", schema, "port", port]).status()?;
+
+            Ok(())
+        }
     }
 }
 
 fn get_proxy(service: &str) -> Result<Sysproxy> {
     match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-        "GNOME" => {
-            let schema = format!("{CMD_KEY}.{service}");
-            let schema = schema.as_str();
-
-            let host = gsettings().args(["get", schema, "host"]).output()?;
-            let host = from_utf8(&host.stdout)
-                .or(Err(Error::ParseStr("host".into())))?
-                .trim();
-            let host = strip_str(host);
-
-            let port = gsettings().args(["get", schema, "port"]).output()?;
-            let port = from_utf8(&port.stdout)
-                .or(Err(Error::ParseStr("port".into())))?
-                .trim();
-            let port = port.parse().unwrap_or(80u16);
-
-            Ok(Sysproxy {
-                enable: false,
-                host: String::from(host),
-                port,
-                bypass: "".into(),
-            })
-        }
         "KDE" => {
             let xdg_dir = xdg::BaseDirectories::new()?;
             let config = xdg_dir.get_config_file("kioslaverc");
@@ -352,7 +324,29 @@ fn get_proxy(service: &str) -> Result<Sysproxy> {
                 bypass: "".into(),
             })
         }
-        _ => Err(Error::NotSupport),
+        _ => {
+            let schema = format!("{CMD_KEY}.{service}");
+            let schema = schema.as_str();
+
+            let host = gsettings().args(["get", schema, "host"]).output()?;
+            let host = from_utf8(&host.stdout)
+                .or(Err(Error::ParseStr("host".into())))?
+                .trim();
+            let host = strip_str(host);
+
+            let port = gsettings().args(["get", schema, "port"]).output()?;
+            let port = from_utf8(&port.stdout)
+                .or(Err(Error::ParseStr("port".into())))?
+                .trim();
+            let port = port.parse().unwrap_or(80u16);
+
+            Ok(Sysproxy {
+                enable: false,
+                host: String::from(host),
+                port,
+                bypass: "".into(),
+            })
+        }
     }
 }
 
