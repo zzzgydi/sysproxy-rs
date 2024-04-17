@@ -233,7 +233,7 @@ fn kreadconfig() -> Command {
     let command = match env::var("KDE_SESSION_VERSION").unwrap_or_default().as_str() {
         "6" => "kreadconfig6",
         _ => "kreadconfig5"
-    }
+    };
     Command::new(command)
 }
 
@@ -241,7 +241,7 @@ fn kwriteconfig() -> Command {
     let command = match env::var("KDE_SESSION_VERSION").unwrap_or_default().as_str() {
         "6" => "kwriteconfig6",
         _ => "kwriteconfig5"
-    }
+    };
     Command::new(command)
 }
 
