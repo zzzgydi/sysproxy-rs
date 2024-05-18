@@ -18,6 +18,12 @@ pub struct Sysproxy {
     pub bypass: String,
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Autoproxy {
+    pub enable: bool,
+    pub url: String,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("failed to parse string `{0}`")]
@@ -44,6 +50,16 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl Sysproxy {
+    pub fn is_support() -> bool {
+        cfg!(any(
+            target_os = "linux",
+            target_os = "macos",
+            target_os = "windows",
+        ))
+    }
+}
+
+impl Autoproxy {
     pub fn is_support() -> bool {
         cfg!(any(
             target_os = "linux",
