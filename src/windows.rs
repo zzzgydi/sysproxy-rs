@@ -1,13 +1,13 @@
-use crate::{Error, Result, Sysproxy};
+use crate::{Autoproxy, Error, Result, Sysproxy};
 use std::ffi::c_void;
 use std::{mem::size_of, mem::ManuallyDrop, net::SocketAddr, str::FromStr};
 use windows::core::PWSTR;
 use windows::Win32::Networking::WinInet::{
     InternetSetOptionW, INTERNET_OPTION_PER_CONNECTION_OPTION,
-    INTERNET_OPTION_PROXY_SETTINGS_CHANGED, INTERNET_OPTION_REFRESH, INTERNET_PER_CONN_FLAGS,
-    INTERNET_PER_CONN_OPTIONW, INTERNET_PER_CONN_OPTIONW_0, INTERNET_PER_CONN_OPTION_LISTW,
-    INTERNET_PER_CONN_PROXY_BYPASS, INTERNET_PER_CONN_PROXY_SERVER, PROXY_TYPE_DIRECT,
-    PROXY_TYPE_PROXY,
+    INTERNET_OPTION_PROXY_SETTINGS_CHANGED, INTERNET_OPTION_REFRESH,
+    INTERNET_PER_CONN_AUTOCONFIG_URL, INTERNET_PER_CONN_FLAGS, INTERNET_PER_CONN_OPTIONW,
+    INTERNET_PER_CONN_OPTIONW_0, INTERNET_PER_CONN_OPTION_LISTW, INTERNET_PER_CONN_PROXY_BYPASS,
+    INTERNET_PER_CONN_PROXY_SERVER, PROXY_TYPE_AUTO_PROXY_URL, PROXY_TYPE_DIRECT, PROXY_TYPE_PROXY,
 };
 use winreg::{enums, RegKey};
 
@@ -35,6 +35,39 @@ fn unset_proxy() -> Result<()> {
     };
     let res = apply(&opts);
     unsafe {
+        ManuallyDrop::drop(&mut p_opts);
+    }
+    res
+}
+
+fn set_auto_proxy(server: String) -> Result<()> {
+    let mut p_opts = ManuallyDrop::new(Vec::<INTERNET_PER_CONN_OPTIONW>::with_capacity(2));
+    p_opts.push(INTERNET_PER_CONN_OPTIONW {
+        dwOption: INTERNET_PER_CONN_FLAGS,
+        Value: INTERNET_PER_CONN_OPTIONW_0 {
+            dwValue: PROXY_TYPE_AUTO_PROXY_URL | PROXY_TYPE_DIRECT,
+        },
+    });
+
+    let mut s = ManuallyDrop::new(server.encode_utf16().chain([0u16]).collect::<Vec<u16>>());
+    p_opts.push(INTERNET_PER_CONN_OPTIONW {
+        dwOption: INTERNET_PER_CONN_AUTOCONFIG_URL,
+        Value: INTERNET_PER_CONN_OPTIONW_0 {
+            pszValue: PWSTR::from_raw(s.as_ptr() as *mut u16),
+        },
+    });
+
+    let opts = INTERNET_PER_CONN_OPTION_LISTW {
+        dwSize: size_of::<INTERNET_PER_CONN_OPTION_LISTW>() as u32,
+        dwOptionCount: 2,
+        dwOptionError: 0,
+        pOptions: p_opts.as_mut_ptr() as *mut INTERNET_PER_CONN_OPTIONW,
+        pszConnection: PWSTR::null(),
+    };
+
+    let res = apply(&opts);
+    unsafe {
+        ManuallyDrop::drop(&mut s);
         ManuallyDrop::drop(&mut p_opts);
     }
     res
@@ -111,7 +144,6 @@ impl Sysproxy {
     pub fn get_system_proxy() -> Result<Sysproxy> {
         let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
         let cur_var = hkcu.open_subkey_with_flags(SUB_KEY, enums::KEY_READ)?;
-
         let enable = cur_var.get_value::<u32, _>("ProxyEnable").unwrap_or(0u32) == 1u32;
         let server = cur_var
             .get_value::<String, _>("ProxyServer")
@@ -141,6 +173,25 @@ impl Sysproxy {
     pub fn set_system_proxy(&self) -> Result<()> {
         match self.enable {
             true => set_global_proxy(format!("{}:{}", self.host, self.port), self.bypass.clone()),
+            false => unset_proxy(),
+        }
+    }
+}
+
+impl Autoproxy {
+    pub fn get_auto_proxy() -> Result<Autoproxy> {
+        let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
+        let cur_var = hkcu.open_subkey_with_flags(SUB_KEY, enums::KEY_READ)?;
+        let url = cur_var.get_value::<String, _>("AutoConfigURL");
+        let enable = url.is_ok();
+        let url = url.unwrap_or("".into());
+
+        Ok(Autoproxy { enable, url })
+    }
+
+    pub fn set_auto_proxy(&self) -> Result<()> {
+        match self.enable {
+            true => set_auto_proxy(self.url.clone()),
             false => unset_proxy(),
         }
     }
