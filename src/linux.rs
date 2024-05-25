@@ -1,4 +1,4 @@
-use crate::{Error, Result, Sysproxy};
+use crate::{Autoproxy, Error, Result, Sysproxy};
 use std::{env, process::Command, str::from_utf8};
 use xdg;
 
@@ -232,7 +232,7 @@ fn gsettings() -> Command {
 fn kreadconfig() -> Command {
     let command = match env::var("KDE_SESSION_VERSION").unwrap_or_default().as_str() {
         "6" => "kreadconfig6",
-        _ => "kreadconfig5"
+        _ => "kreadconfig5",
     };
     Command::new(command)
 }
@@ -240,7 +240,7 @@ fn kreadconfig() -> Command {
 fn kwriteconfig() -> Command {
     let command = match env::var("KDE_SESSION_VERSION").unwrap_or_default().as_str() {
         "6" => "kwriteconfig6",
-        _ => "kwriteconfig5"
+        _ => "kwriteconfig5",
     };
     Command::new(command)
 }
@@ -363,4 +363,102 @@ fn strip_str<'a>(text: &'a str) -> &'a str {
         .unwrap_or(text)
         .strip_suffix('\'')
         .unwrap_or(text)
+}
+
+impl Autoproxy {
+    pub fn get_auto_proxy() -> Result<Autoproxy> {
+        let (enable, url) = match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
+            "KDE" => {
+                let xdg_dir = xdg::BaseDirectories::new()?;
+                let config = xdg_dir.get_config_file("kioslaverc");
+                let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
+
+                let mode = kreadconfig()
+                    .args([
+                        "--file",
+                        config,
+                        "--group",
+                        "Proxy Settings",
+                        "--key",
+                        "ProxyType",
+                    ])
+                    .output()?;
+                let mode = from_utf8(&mode.stdout)
+                    .or(Err(Error::ParseStr("mode".into())))?
+                    .trim();
+                let url = kreadconfig()
+                    .args([
+                        "--file",
+                        config,
+                        "--group",
+                        "Proxy Settings",
+                        "--key",
+                        "Proxy Config Script",
+                    ])
+                    .output()?;
+                let url = from_utf8(&url.stdout)
+                    .or(Err(Error::ParseStr("url".into())))?
+                    .trim();
+                (mode == "2", url.to_string())
+            }
+            _ => {
+                let mode = gsettings().args(["get", CMD_KEY, "mode"]).output()?;
+                let mode = from_utf8(&mode.stdout)
+                    .or(Err(Error::ParseStr("mode".into())))?
+                    .trim();
+                let url = gsettings()
+                    .args(["get", CMD_KEY, "autoconfig-url"])
+                    .output()?;
+                let url: &str = from_utf8(&url.stdout)
+                    .or(Err(Error::ParseStr("url".into())))?
+                    .trim();
+                let url = strip_str(url);
+                (mode == "'auto'", url.to_string())
+            }
+        };
+
+        Ok(Autoproxy { enable, url })
+    }
+
+    pub fn set_auto_proxy(&self) -> Result<()> {
+        match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
+            "KDE" => {
+                let xdg_dir = xdg::BaseDirectories::new()?;
+                let config = xdg_dir.get_config_file("kioslaverc");
+                let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
+                let mode = if self.enable { "2" } else { "0" };
+                kwriteconfig()
+                    .args([
+                        "--file",
+                        config,
+                        "--group",
+                        "Proxy Settings",
+                        "--key",
+                        "ProxyType",
+                        mode,
+                    ])
+                    .status()?;
+                kwriteconfig()
+                    .args([
+                        "--file",
+                        config,
+                        "--group",
+                        "Proxy Settings",
+                        "--key",
+                        "Proxy Config Script",
+                        &self.url,
+                    ])
+                    .status()?;
+            }
+            _ => {
+                let mode = if self.enable { "'auto'" } else { "'none'" };
+                gsettings().args(["set", CMD_KEY, "mode", mode]).status()?;
+                gsettings()
+                    .args(["set", CMD_KEY, "autoconfig-url", &self.url])
+                    .status()?;
+            }
+        }
+
+        Ok(())
+    }
 }
