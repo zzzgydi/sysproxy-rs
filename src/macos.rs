@@ -1,4 +1,4 @@
-use crate::{Error, Result, Sysproxy};
+use crate::{Autoproxy, Error, Result, Sysproxy};
 use log::debug;
 use std::net::{SocketAddr, UdpSocket};
 use std::{process::Command, str::from_utf8};
@@ -122,6 +122,65 @@ impl Sysproxy {
     }
 }
 
+impl Autoproxy {
+    pub fn get_auto_proxy() -> Result<Autoproxy> {
+        let service = default_network_service().or_else(|e| {
+            debug!("Failed to get network service: {:?}", e);
+            default_network_service_by_ns()
+        });
+        if let Err(e) = service {
+            debug!("Failed to get network service by networksetup: {:?}", e);
+            return Err(e);
+        }
+        let service = service.unwrap();
+        let service = service.as_str();
+
+        let auto_output = networksetup()
+            .args(["-getautoproxyurl", service])
+            .output()?;
+        let auto = from_utf8(&auto_output.stdout)
+            .or(Err(Error::ParseStr("auto".into())))?
+            .trim()
+            .split_once('\n')
+            .ok_or(Error::ParseStr("auto".into()))?;
+        let url = strip_str(auto.0.strip_prefix("URL: ").unwrap_or(""));
+        let enable = auto.1 == "Enabled: Yes";
+
+        Ok(Autoproxy {
+            enable,
+            url: url.to_string(),
+        })
+    }
+
+    pub fn set_auto_proxy(&self) -> Result<()> {
+        let service = default_network_service().or_else(|e| {
+            debug!("Failed to get network service: {:?}", e);
+            default_network_service_by_ns()
+        });
+        if let Err(e) = service {
+            debug!("Failed to get network service by networksetup: {:?}", e);
+            return Err(e);
+        }
+        let service = service.unwrap();
+        let service = service.as_str();
+
+        let enable = if self.enable { "on" } else { "off" };
+        let url = if self.url.is_empty() {
+            "\"\""
+        } else {
+            &self.url
+        };
+        networksetup()
+            .args(["-setautoproxyurl", service, url])
+            .status()?;
+        networksetup()
+            .args(["-setautoproxystate", service, enable])
+            .status()?;
+
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 enum ProxyType {
     HTTP,
@@ -202,6 +261,13 @@ fn parse<'a>(target: &'a str, key: &'a str) -> &'a str {
         }
         None => "",
     }
+}
+
+fn strip_str<'a>(text: &'a str) -> &'a str {
+    text.strip_prefix('"')
+        .unwrap_or(text)
+        .strip_suffix('"')
+        .unwrap_or(text)
 }
 
 fn default_network_service() -> Result<String> {
