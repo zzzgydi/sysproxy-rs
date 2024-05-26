@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
     use sysproxy::{Autoproxy, Sysproxy};
 
     #[test]
@@ -23,6 +24,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_system_enable() {
         let mut sysproxy = Sysproxy {
             enable: true,
@@ -47,6 +49,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_auto_enable() {
         let mut autoproxy = Autoproxy {
             enable: true,
