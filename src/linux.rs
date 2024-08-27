@@ -1,6 +1,5 @@
 use crate::{Autoproxy, Error, Result, Sysproxy};
 use std::{env, process::Command, str::from_utf8};
-use xdg;
 
 const CMD_KEY: &str = "org.gnome.system.proxy";
 
@@ -12,12 +11,12 @@ impl Sysproxy {
         let https = get_proxy("https")?;
         let http = get_proxy("http")?;
 
-        if socks.host.len() == 0 {
-            if http.host.len() > 0 {
+        if socks.host.is_empty() {
+            if !http.host.is_empty() {
                 socks.host = http.host;
                 socks.port = http.port;
             }
-            if https.host.len() > 0 {
+            if !https.host.is_empty() {
                 socks.host = https.host;
                 socks.port = https.port;
             }
@@ -195,7 +194,7 @@ impl Sysproxy {
                             host = String::from("'") + &host;
                         }
                         if !host.ends_with('\'') && !host.ends_with('"') {
-                            host = host + "'";
+                            host += "'";
                         }
                         host
                     })
@@ -260,7 +259,7 @@ fn set_proxy(proxy: &Sysproxy, service: &str) -> Result<()> {
                 _ => "http",
             };
 
-            let host = format!("{}", proxy.host);
+            let host = proxy.host.to_string();
             let host = host.as_str();
             let port = format!("{}", proxy.port);
             let port = port.as_str();
@@ -358,7 +357,7 @@ fn get_proxy(service: &str) -> Result<Sysproxy> {
     }
 }
 
-fn strip_str<'a>(text: &'a str) -> &'a str {
+fn strip_str(text: &str) -> &str {
     text.strip_prefix('\'')
         .unwrap_or(text)
         .strip_suffix('\'')
