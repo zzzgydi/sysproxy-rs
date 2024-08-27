@@ -1,7 +1,11 @@
 use crate::{Autoproxy, Error, Result, Sysproxy};
-use std::{env, process::Command, str::from_utf8};
+use std::{env, process::Command, str::from_utf8, sync::LazyLock};
 
 const CMD_KEY: &str = "org.gnome.system.proxy";
+
+static IS_APPIMAGE: LazyLock<bool> = LazyLock::new(|| {
+    std::env::var("APPIMAGE").is_ok()
+});
 
 impl Sysproxy {
     pub fn get_system_proxy() -> Result<Sysproxy> {
@@ -225,7 +229,11 @@ impl Sysproxy {
 }
 
 fn gsettings() -> Command {
-    Command::new("gsettings")
+    let mut command = Command::new("gsettings");
+    if *IS_APPIMAGE {
+        command.env_remove("LD_LIBRARY_PATH");
+    }
+    command
 }
 
 fn kreadconfig() -> Command {
@@ -233,7 +241,11 @@ fn kreadconfig() -> Command {
         "6" => "kreadconfig6",
         _ => "kreadconfig5",
     };
-    Command::new(command)
+    let mut command = Command::new(command);
+    if *IS_APPIMAGE {
+        command.env_remove("LD_LIBRARY_PATH");
+    }
+    command
 }
 
 fn kwriteconfig() -> Command {
@@ -241,7 +253,11 @@ fn kwriteconfig() -> Command {
         "6" => "kwriteconfig6",
         _ => "kwriteconfig5",
     };
-    Command::new(command)
+    let mut command = Command::new(command);
+    if *IS_APPIMAGE {
+        command.env_remove("LD_LIBRARY_PATH");
+    }
+    command
 }
 
 fn set_proxy(proxy: &Sysproxy, service: &str) -> Result<()> {
