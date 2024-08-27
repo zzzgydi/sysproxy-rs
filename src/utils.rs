@@ -1,5 +1,5 @@
 use crate::{Error, Result};
-use iptools::iprange::{IpRange, IpVer};
+use iptools::iprange::{IPv4, IpRange, IpVer};
 
 /// Convert ipv4 cidr to wildcard
 ///
@@ -9,9 +9,9 @@ use iptools::iprange::{IpRange, IpVer};
 /// assert_eq!(ipv4_cidr_to_wildcard("127.0.0.1/8").unwrap(), vec!["127.*".to_string()]);
 /// ```
 pub fn ipv4_cidr_to_wildcard(cidr: &str) -> Result<Vec<String>> {
-    let ip = IpRange::new(cidr, "").or(Err(Error::ParseStr(cidr.into())))?;
+    let ip = IpRange::<IPv4>::new(cidr, "").or(Err(Error::ParseStr(cidr.into())))?;
 
-    if ip.get_version() != IpVer::IPV4 {
+    if ip.get_version() != IpVer::V4 {
         return Err(Error::ParseStr(cidr.into()));
     }
 
