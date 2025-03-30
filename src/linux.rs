@@ -147,6 +147,7 @@ impl Sysproxy {
                 let config = xdg_dir.get_config_file("kioslaverc");
                 let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
                 let mode = if self.enable { "1" } else { "0" };
+                gsettings().args(["set", CMD_KEY, "mode", mode]).status()?;
                 kwriteconfig()
                     .args([
                         "--file",
@@ -174,6 +175,28 @@ impl Sysproxy {
                 let xdg_dir = xdg::BaseDirectories::new()?;
                 let config = xdg_dir.get_config_file("kioslaverc");
                 let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
+
+                let bypass = self
+                .bypass
+                .split(',')
+                .map(|h| {
+                    let mut host = String::from(h.trim());
+                    if !host.starts_with('\'') && !host.starts_with('"') {
+                        host = String::from("'") + &host;
+                    }
+                    if !host.ends_with('\'') && !host.ends_with('"') {
+                        host += "'";
+                    }
+                    host
+                })
+                .collect::<Vec<String>>()
+                .join(", ");
+
+                let bypass = format!("[{bypass}]");
+
+                gsettings()
+                .args(["set", CMD_KEY, "ignore-hosts", bypass.as_str()])
+                .status()?;
 
                 kwriteconfig()
                     .args([
@@ -294,6 +317,17 @@ fn set_proxy(proxy: &Sysproxy, service: &str) -> Result<()> {
                     schema,
                 ])
                 .status()?;
+
+            let schema = format!("{CMD_KEY}.{service}");
+            let schema = schema.as_str();
+
+            let host = format!("'{}'", proxy.host);
+            let host = host.as_str();
+            let port = format!("{}", proxy.port);
+            let port = port.as_str();
+
+            gsettings().args(["set", schema, "host", host]).status()?;
+            gsettings().args(["set", schema, "port", port]).status()?;
 
             Ok(())
         }
@@ -463,6 +497,10 @@ impl Autoproxy {
                         "Proxy Config Script",
                         &self.url,
                     ])
+                    .status()?;
+                gsettings().args(["set", CMD_KEY, "mode", mode]).status()?;
+                gsettings()
+                    .args(["set", CMD_KEY, "autoconfig-url", &self.url])
                     .status()?;
             }
             _ => {
