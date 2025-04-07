@@ -26,6 +26,10 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v2
 
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt install -y gsettings-desktop-schemas
+
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
