@@ -14,17 +14,20 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires a configured desktop network service"]
     fn test_sys_get() {
         Sysproxy::get_system_proxy().unwrap();
     }
 
     #[test]
+    #[ignore = "requires a configured desktop network service"]
     fn test_auto_get() {
         Autoproxy::get_auto_proxy().unwrap();
     }
 
     #[test]
     #[serial]
+    #[ignore = "changes real system proxy settings; run only on a disposable machine"]
     fn test_system_enable() {
         let mut sysproxy = Sysproxy {
             enable: true,
@@ -50,6 +53,7 @@ mod tests {
 
     #[test]
     #[serial]
+    #[ignore = "changes real system proxy settings; run only on a disposable machine"]
     fn test_auto_enable() {
         let mut autoproxy = Autoproxy {
             enable: true,

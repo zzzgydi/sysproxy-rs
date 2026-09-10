@@ -15,7 +15,6 @@ env:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
     strategy:
       matrix:
         os:
@@ -24,25 +23,46 @@ jobs:
           - windows-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Install dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt install -y gsettings-desktop-schemas
+        run: sudo apt install -y gsettings-desktop-schemas dbus dconf-service dconf-gsettings-backend
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: stable
-          profile: minimal
-          override: true
+          components: clippy
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@ce325b60658c1b38465c06cc965b79baf32c1e72
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Run cargo check
         run: cargo check
 
       - name: Run cargo test
         run: |
-          cargo test -- --nocapture 
+          cargo test -- --nocapture
+
+      - name: Test without optional IP utilities
+        run: cargo test --no-default-features
+
+      - name: Check macOS backend
+        if: matrix.os == 'macos-latest'
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      # Hosted runners are disposable. Keep these opt-in on developer machines.
+      - name: Test Linux system proxy in an isolated session
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          XDG_CURRENT_DESKTOP: GNOME
+          XDG_CONFIG_HOME: ${{ runner.temp }}/sysproxy-test-config
+          GSETTINGS_BACKEND: dconf
+        run: |
+          mkdir -p "$XDG_CONFIG_HOME"
+          dbus-run-session -- cargo test --test test -- --ignored --test-threads=1
+
+      - name: Test Windows system proxy on disposable runner
+        if: matrix.os == 'windows-latest'
+        run: cargo test --test test -- --ignored --test-threads=1
